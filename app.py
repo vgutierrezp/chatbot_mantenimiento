@@ -4,7 +4,6 @@ from googleapiclient.discovery import build
 import pandas as pd
 import io
 
-# Autenticación de Google Drive
 @st.experimental_singleton
 def authenticate():
     credentials = service_account.Credentials.from_service_account_info(
