@@ -3,8 +3,6 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import pandas as pd
 import io
-import gspread
-from gspread_dataframe import get_as_dataframe
 
 # Autenticación de Google Drive
 @st.experimental_singleton
@@ -13,13 +11,11 @@ def authenticate():
         st.secrets["gdrive"],
         scopes=["https://www.googleapis.com/auth/drive"]
     )
-    client = gspread.authorize(credentials)
-    return client
+    return build('drive', 'v3', credentials=credentials)
 
-client = authenticate()
+drive_service = authenticate()
 
 def load_data(folder_id):
-    drive_service = build('drive', 'v3', credentials=client.auth)
     results = drive_service.files().list(
         q=f"'{folder_id}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'",
         pageSize=10, fields="files(id, name)").execute()
@@ -31,8 +27,9 @@ def load_data(folder_id):
     for item in items:
         file_id = item['id']
         file_name = item['name']
-        file = drive_service.files().get_media(fileId=file_id).execute()
-        df = pd.read_excel(io.BytesIO(file))
+        request = drive_service.files().get_media(fileId=file_id)
+        file = io.BytesIO(request.execute())
+        df = pd.read_excel(file)
         data.append(df)
         file_names.append(file_name)
 
