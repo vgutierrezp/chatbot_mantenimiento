@@ -1,5 +1,5 @@
 streamlit
 pandas
-openpyxl
-xlsxwriter
-pydrive
+gspread
+gspread_pandas
+google-auth
