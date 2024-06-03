@@ -3,6 +3,10 @@ import pandas as pd
 import os
 from io import BytesIO
 
+# Inicializar la sesión
+if 'key' not in st.session_state:
+    st.session_state['key'] = 'value'
+
 def load_data():
     folder_path = r"C:\Users\vgutierrez\OneDrive - Servicios Compartidos de Restaurantes SAC\Documentos\01 Plan Preventivo Anual NGR\Preventivo\2024 PAM\PROVEEDORES"
     all_data = []
@@ -20,10 +24,11 @@ def filter_data(data, file_names, mes, marca, tienda):
     for df, file_name in zip(data, file_names):
         for sheet_name, sheet_df in df.items():
             if all(col in sheet_df.columns for col in ['Mes', 'Marca', 'Tienda']):
+                # Convertir las columnas necesarias a string
                 sheet_df['Mes'] = sheet_df['Mes'].astype(str)
                 sheet_df['Marca'] = sheet_df['Marca'].astype(str)
                 sheet_df['Tienda'] = sheet_df['Tienda'].astype(str)
-
+                
                 df_filtered = sheet_df.copy()
                 if mes:
                     df_filtered = df_filtered[df_filtered['Mes'].str.contains(mes, case=False, na=False)]
@@ -31,7 +36,7 @@ def filter_data(data, file_names, mes, marca, tienda):
                     df_filtered = df_filtered[df_filtered['Marca'].str.contains(marca, case=False, na=False)]
                 if tienda:
                     df_filtered = df_filtered[df_filtered['Tienda'].str.contains(tienda, case=False, na=False)]
-
+                    
                 if not df_filtered.empty:
                     filtered_data.append(df_filtered)
             else:
@@ -45,17 +50,6 @@ input_mes = st.text_input("Ingresa el mes:")
 input_marca = st.text_input("Ingresa la marca:")
 input_tienda = st.text_input("Ingresa la tienda:")
 
-# Si cualquiera de los filtros cambia, se recarga la aplicación
-if st.session_state.get("last_input_mes") != input_mes:
-    st.session_state["last_input_mes"] = input_mes
-    st.experimental_rerun()
-if st.session_state.get("last_input_marca") != input_marca:
-    st.session_state["last_input_marca"] = input_marca
-    st.experimental_rerun()
-if st.session_state.get("last_input_tienda") != input_tienda:
-    st.session_state["last_input_tienda"] = input_tienda
-    st.experimental_rerun()
-
 if input_mes or input_marca or input_tienda:
     data, file_names = load_data()
     df_filtered = filter_data(data, file_names, input_mes, input_marca, input_tienda)
@@ -63,32 +57,33 @@ if input_mes or input_marca or input_tienda:
     if not df_filtered.empty:
         columns_to_show = [
             "Mes", "Tienda", "Familia", "Tipo de Equipo", "Tipo de Servicio", "Ejecutor",
-            "Frecuencia", "N° Equipos", "Ult. Prev.", "Prog.1", "Ejec.1",
+            "Frecuencia", "N° Equipos", "Ult.Prev.", "Prog.1", "Ejec.1",
             "CO", "CL", "IP", "RP"
         ]
-
+        
+        # Verificar qué columnas están presentes en los datos filtrados
         available_columns = [col for col in columns_to_show if col in df_filtered.columns]
-
-        for col in ['Ult. Prev.', 'Prog.1', 'Ejec.1', 'CO', 'CL', 'IP', 'RP']:
+        
+        # Asegurar que las fechas tengan el formato correcto
+        for col in ['Ult.Prev.', 'Prog.1', 'Ejec.1']:
             if col in df_filtered.columns:
-                try:
-                    df_filtered[col] = pd.to_datetime(df_filtered[col], errors='coerce').dt.strftime('%d-%m-%Y')
-                except Exception as e:
-                    st.warning(f"Error al formatear la columna {col}: {e}")
-
-        df_filtered = df_filtered.sort_values(by=['Mes', 'Familia'], key=lambda x: pd.Categorical(x, categories=["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"], ordered=True))
-
+                df_filtered[col] = pd.to_datetime(df_filtered[col]).dt.strftime('%d-%m-%Y')
+        
         st.write(f"Datos filtrados para Mes: {input_mes or 'Todos'}, Marca: {input_marca or 'Todas'}, Tienda: {input_tienda or 'Todas'}")
         st.dataframe(df_filtered[available_columns])
         
+        # Convertir el DataFrame filtrado a un archivo Excel con formato
         output = BytesIO()
         writer = pd.ExcelWriter(output, engine='xlsxwriter')
         df_filtered[available_columns].to_excel(writer, index=False, sheet_name='Filtered Data')
-        
+
+        # Obtener el libro y la hoja para aplicar formato
         workbook = writer.book
         worksheet = writer.sheets['Filtered Data']
+
+        # Definir el formato para las columnas CO, CL, IP y RP
+        format1 = workbook.add_format({'num_format': '0.00'})
         
-        format1 = workbook.add_format({'num_format': 'dd-mm-yyyy'})
         for col in ['CO', 'CL', 'IP', 'RP']:
             if col in df_filtered.columns:
                 col_idx = df_filtered.columns.get_loc(col)
@@ -97,6 +92,7 @@ if input_mes or input_marca or input_tienda:
         writer.close()
         output.seek(0)
 
+        # Proveer el archivo para descarga
         st.download_button(
             label="Descargar datos filtrados en Excel",
             data=output,
