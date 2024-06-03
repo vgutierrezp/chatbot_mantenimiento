@@ -2,40 +2,44 @@ import streamlit as st
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import pandas as pd
+import io
+import gspread
+from gspread_dataframe import get_as_dataframe
 
 # Autenticación de Google Drive
 @st.experimental_singleton
 def authenticate():
     credentials = service_account.Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
+        st.secrets["gdrive"],
         scopes=["https://www.googleapis.com/auth/drive"]
     )
-    return build('drive', 'v3', credentials=credentials)
+    client = gspread.authorize(credentials)
+    return client
 
-drive_service = authenticate()
+client = authenticate()
 
-def load_data(drive_service, folder_id):
-    query = f"'{folder_id}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'"
-    results = drive_service.files().list(q=query).execute()
+def load_data(folder_id):
+    drive_service = build('drive', 'v3', credentials=client.auth)
+    results = drive_service.files().list(
+        q=f"'{folder_id}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'",
+        pageSize=10, fields="files(id, name)").execute()
     items = results.get('files', [])
-    
+
     data = []
     file_names = []
 
     for item in items:
         file_id = item['id']
         file_name = item['name']
-        request = drive_service.files().get_media(fileId=file_id)
-        file_data = request.execute()
-        with open(file_name, "wb") as f:
-            f.write(file_data)
-        data.append(pd.read_excel(file_name))
+        file = drive_service.files().get_media(fileId=file_id).execute()
+        df = pd.read_excel(io.BytesIO(file))
+        data.append(df)
         file_names.append(file_name)
 
     return data, file_names
 
 folder_id = '1uHfThsP-2xmFZzDBvQH_m1t6_QWfM6YT'
-data, file_names = load_data(drive_service, folder_id)
+data, file_names = load_data(folder_id)
 
 st.title("Chatbot de Mantenimiento")
 st.write("Este chatbot te ayudará a consultar información de mantenimiento preventivo.")
